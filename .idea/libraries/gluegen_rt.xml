@@ -1,0 +1,12 @@
+<component name="libraryTable">
+  <library name="gluegen-rt">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/libs/gluegen-rt.jar!/" />
+      <root url="jar://$PROJECT_DIR$/libs/jogl-all.jar!/" />
+      <root url="jar://$PROJECT_DIR$/libs/jogl-all-natives-windows-amd64.jar!/" />
+      <root url="jar://$PROJECT_DIR$/libs/gluegen-rt-natives-windows-amd64.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
