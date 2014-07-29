@@ -8,11 +8,16 @@ import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * Simple class for extracting the number of vertices and faces from a PLY file.
+ * <p/>
+ * Doesn't adhere to the flexible PLY format. Instead it expects a very specific format
+ * designed for the scope of this project for speed.
+ */
 class PLYHeader {
 
-    private static final Logger log = Logger.getLogger(PLYReader.class.getName());
+    private static final Logger log = Logger.getLogger(PLYHeader.class.getName());
 
-    private final MappedByteBuffer buffer;
     private final String headerContent;
 
     private int vertexCount = -1;
@@ -24,15 +29,13 @@ class PLYHeader {
     public PLYHeader(final MappedByteBuffer buffer) throws InvalidFileException {
         log.log(Level.FINE, "processing PLY header information");
 
-        this.buffer = buffer;
-
         byte[] tmp = new byte[1024];
-        this.buffer.get(tmp);
+        buffer.get(tmp);
 
         this.headerContent = isolateHeader(new String(tmp));
         this.dataOffset = this.headerContent.length();
 
-        log.log(Level.FINE, "header isolated. data offset is {0}", this.dataOffset);
+        log.log(Level.FINER, "header isolated. data offset is {0}", this.dataOffset);
 
         parse();
 

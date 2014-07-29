@@ -4,7 +4,11 @@ import org.apache.commons.math3.geometry.euclidean.threed.Vector3D;
 
 class Camera {
 
-    private final double MOVE_SPEED = 0.1;
+    public static final float NEAR_PLANE = 1f;
+    public static final float FAR_PLACE = 2000f;
+    public static final float FOV = 45f;
+
+    private final double MOVE_SPEED = 10;
 
     private Vector3D position;
     private Vector3D direction;
@@ -12,7 +16,7 @@ class Camera {
     private double pitch, yaw;
 
     public Camera() {
-        this.position = new Vector3D(-10, 0, 0);
+        this.position = new Vector3D(-1000, 0, 0);
         this.direction = Vector3D.PLUS_I;
 
         this.pitch = 0;
@@ -21,7 +25,7 @@ class Camera {
 
     private void calculateDirectionVectors() {
         Rotation rotation = new Rotation(RotationOrder.ZYZ, 0, Math.toRadians(this.yaw), Math.toRadians(this.pitch));
-        this.direction = rotation.applyTo(Vector3D.PLUS_I);
+        this.direction = rotation.applyTo(Vector3D.PLUS_I).normalize();
     }
 
     public void addPitch(double angle) {
@@ -46,12 +50,13 @@ class Camera {
         return new Vector3D(this.position.toArray());
     }
 
-    public Vector3D getDirection() {
-        return new Vector3D(this.direction.toArray());
-    }
-
+    @SuppressWarnings("SameReturnValue")
     public Vector3D getUp() {
         return Vector3D.PLUS_J;
+    }
+
+    public Vector3D getLookAt() {
+        return this.position.add(this.direction);
     }
 
     public void moveForward() {

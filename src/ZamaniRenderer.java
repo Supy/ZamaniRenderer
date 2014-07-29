@@ -1,5 +1,7 @@
 import com.jogamp.opengl.util.Animator;
 import org.apache.commons.math3.geometry.euclidean.threed.Vector3D;
+import ply.PLYReader;
+import utils.ByteSize;
 
 import javax.media.opengl.GL2;
 import javax.media.opengl.GLAutoDrawable;
@@ -9,22 +11,30 @@ import javax.media.opengl.glu.GLU;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.nio.FloatBuffer;
+import java.nio.IntBuffer;
 import java.util.HashMap;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import static java.util.logging.Level.FINE;
 
 
 class ZamaniRenderer implements GLEventListener, KeyListener, MouseWheelListener, MouseMotionListener {
 
+    private static final Logger log = Logger.getLogger(ZamaniRenderer.class.getName());
+
     // Rendering settings for debugging purposes.
-    private boolean drawNormals = true;
+    private boolean drawNormals = false;
     private int glPolygonMode = GL2.GL_FILL;
 
     // Stores the list of currently pressed keys.
-    private final HashMap<Integer, Boolean> keysDown = new HashMap<Integer, Boolean>();
-
-    // The Array For The Points On The Grid Of Our "Wave"
-    private final double[][][] points = new double[45][45][3];
+    private final HashMap<Integer, Boolean> keysDown = new HashMap<>();
 
     private final GLU glu = new GLU();
     private GL2 gl;
@@ -32,61 +42,78 @@ class ZamaniRenderer implements GLEventListener, KeyListener, MouseWheelListener
     private int mouseCenterX, mouseCenterY;
     private static Cursor invisibleCursor;
 
+    private PLYReader plyReader;
+    private final IntBuffer buffers = IntBuffer.allocate(2);
+
     public static void main(String[] args) {
 
-        ZamaniRenderer zamaniRenderer = new ZamaniRenderer();
+        setupLogging();
 
-        GLCanvas canvas = new GLCanvas();
-        canvas.addGLEventListener(zamaniRenderer);
-        canvas.addKeyListener(zamaniRenderer);
-        canvas.addMouseWheelListener(zamaniRenderer);
-        canvas.addMouseMotionListener(zamaniRenderer);
+        if (args.length != 1) {
+            throw new IllegalArgumentException("must provide path to a PLY file");
+        }
 
-        makeInvisibleCursor();
+        try {
+            ZamaniRenderer zamaniRenderer = new ZamaniRenderer(args[0]);
 
-        Frame frame = new Frame("Zamani Renderer");
-        frame.add(canvas);
-        frame.setSize(1200, 880);
-        frame.setUndecorated(false);
-        frame.addWindowListener(new WindowAdapter() {
-            public void windowClosing(WindowEvent e) {
-                System.exit(0);
-            }
-        });
-        frame.setVisible(true);
-        frame.requestFocus();
-        frame.setCursor(invisibleCursor);
+            GLCanvas canvas = new GLCanvas();
+            canvas.addGLEventListener(zamaniRenderer);
+            canvas.addKeyListener(zamaniRenderer);
+            canvas.addMouseWheelListener(zamaniRenderer);
+            canvas.addMouseMotionListener(zamaniRenderer);
 
-        // Repeatedly calls the canvas's display() method.
-        Animator animator = new Animator(canvas);
-        animator.start();
+            makeInvisibleCursor();
+
+            Frame frame = new Frame("Zamani Renderer");
+            frame.add(canvas);
+            frame.setSize(1200, 880);
+            frame.setUndecorated(false);
+            frame.addWindowListener(new WindowAdapter() {
+                public void windowClosing(WindowEvent e) {
+                    System.exit(0);
+                }
+            });
+            frame.setVisible(true);
+            frame.requestFocus();
+            frame.setCursor(invisibleCursor);
+
+            // Repeatedly calls the canvas's display() method.
+            Animator animator = new Animator(canvas);
+            animator.start();
+            animator.setUpdateFPSFrames(100, System.out);
+        } catch (IOException e) {
+            log.log(Level.SEVERE, "could not open file", e);
+        }
+    }
+
+    private ZamaniRenderer(String fileName) throws IOException {
+        this.plyReader = new PLYReader(fileName);
     }
 
     public void init(GLAutoDrawable glDrawable) {
         gl = (GL2) glDrawable.getGL();
 
-        gl.glShadeModel(GL2.GL_SMOOTH);
+        gl.glShadeModel(GL2.GL_FLAT);
         gl.glClearColor(0.0f, 0.0f, 0.0f, 0.5f);                        // Clear the background colour to black.
         gl.glEnable(GL2.GL_DEPTH_TEST);                                 // Enable depth testing.
         gl.glDepthFunc(GL2.GL_LEQUAL);                                  // The type of depth test.
         gl.glClearDepth(1.0);
         gl.glHint(GL2.GL_PERSPECTIVE_CORRECTION_HINT, GL2.GL_NICEST);   // Quality of perspective calculations. Can possibly lower this.
-        gl.glEnable(GL2.GL_NORMALIZE);
+        gl.glEnableClientState(GL2.GL_VERTEX_ARRAY);
+        gl.glEnable(GL2.GL_CULL_FACE);
 
         setupLighting();
 
-        camera = new Camera();
+        gl.glGenBuffers(2, buffers);
+        gl.glBindBuffer(GL2.GL_ARRAY_BUFFER, buffers.get(0));
+        gl.glBufferData(GL2.GL_ARRAY_BUFFER, this.plyReader.vertices.length * ByteSize.FLOAT, FloatBuffer.wrap(this.plyReader.vertices), GL2.GL_STATIC_DRAW);
+        gl.glBindBuffer(GL2.GL_ARRAY_BUFFER, 0);
 
-        // Create our sample points.
-        for (int x = 0; x < 45; x++) {
-            for (int y = 0; y < 45; y++) {
-                points[x][y][0] = ((x / 10.0f) - 2.25f);
-                points[x][y][2] = ((y / 10.0f) - 2.25f);
-                double x2 = (x / 22.5) - 1;
-                double y2 = (y / 22.5f) - 1;
-                points[x][y][1] = x2 * x2 * x2 - 3 * x2 + y2 * y2 * y2 - 3 * y2;
-            }
-        }
+        gl.glBindBuffer(GL2.GL_ELEMENT_ARRAY_BUFFER, buffers.get(1));
+        gl.glBufferData(GL2.GL_ELEMENT_ARRAY_BUFFER, this.plyReader.indices.length * ByteSize.INT, IntBuffer.wrap(this.plyReader.indices), GL2.GL_STATIC_DRAW);
+        gl.glBindBuffer(GL2.GL_ELEMENT_ARRAY_BUFFER, 0);
+
+        camera = new Camera();
 
         new Timer().schedule(new TimerTask() {
             @Override
@@ -97,76 +124,33 @@ class ZamaniRenderer implements GLEventListener, KeyListener, MouseWheelListener
     }
 
     public void display(GLAutoDrawable glDrawable) {
-        gl.glPolygonMode(GL2.GL_FRONT_AND_BACK, glPolygonMode);           // Render our points as lines.
-
-        // Clear the buffers.
-        gl.glClear(GL2.GL_COLOR_BUFFER_BIT | GL2.GL_DEPTH_BUFFER_BIT);
-
         // Make sure we're in model view.
         gl.glMatrixMode(GL2.GL_MODELVIEW);
         gl.glLoadIdentity();
 
+        gl.glPolygonMode(GL2.GL_FRONT_AND_BACK, glPolygonMode);
+
+        // Clear the buffers.
+        gl.glClear(GL2.GL_COLOR_BUFFER_BIT | GL2.GL_DEPTH_BUFFER_BIT);
+
         Vector3D cameraPos = camera.getPosition();
-        Vector3D lookAt = cameraPos.add(camera.getDirection());
+        Vector3D lookAt = camera.getLookAt();
         Vector3D up = camera.getUp();
 
         // Set the camera's position and rotation. Always look at the origin.
         glu.gluLookAt(cameraPos.getX(), cameraPos.getY(), cameraPos.getZ(), lookAt.getX(), lookAt.getY(), lookAt.getZ(), up.getX(), up.getY(), up.getZ());
 
-
-        gl.glPushMatrix();
-
         gl.glEnable(GL2.GL_LIGHTING);
 
-        gl.glBegin(GL2.GL_QUADS);
-        gl.glColor3f(1, 1, 1);
-
-        for (int x = 0; x < 44; x++) {
-            for (int y = 0; y < 44; y++) {
-                Vector3D quadNormal = Vector3D.crossProduct(new Vector3D(points[x][y]), new Vector3D(points[x][y + 1])).normalize();
-
-                gl.glNormal3d(quadNormal.getX(), quadNormal.getY(), quadNormal.getZ());
-
-                gl.glVertex3d(points[x][y][0], points[x][y][1], points[x][y][2]);
-                gl.glVertex3d(points[x][y + 1][0], points[x][y + 1][1], points[x][y + 1][2]);
-                gl.glVertex3d(points[x + 1][y + 1][0], points[x + 1][y + 1][1], points[x + 1][y + 1][2]);
-                gl.glVertex3d(points[x + 1][y][0], points[x + 1][y][1], points[x + 1][y][2]);
-            }
-        }
-
-        gl.glEnd();
+        // Draw the model.
+        gl.glBindBuffer(GL2.GL_ARRAY_BUFFER, buffers.get(0));
+        gl.glVertexPointer(3, GL2.GL_FLOAT, 0, 0);
+        gl.glBindBuffer(GL2.GL_ELEMENT_ARRAY_BUFFER, buffers.get(1));
+        gl.glDrawElements(GL2.GL_TRIANGLES, this.plyReader.indices.length, GL2.GL_UNSIGNED_INT, 0);
 
         gl.glDisable(GL2.GL_LIGHTING);
 
-        if (drawNormals) {
-            gl.glBegin(GL2.GL_LINES);
-            gl.glColor3f(0, 0.6f, 0);
-
-            for (int x = 0; x < 44; x++) {
-                for (int y = 0; y < 44; y++) {
-                    Vector3D quadNormal = Vector3D.crossProduct(new Vector3D(points[x][y]), new Vector3D(points[x][y + 1])).normalize();
-
-                    gl.glVertex3d(points[x][y][0], points[x][y][1], points[x][y][2]);
-                    gl.glVertex3d(points[x][y][0] + quadNormal.getX(), points[x][y][1] + quadNormal.getY(), points[x][y][2] + quadNormal.getZ());
-
-
-                    gl.glVertex3d(points[x][y + 1][0], points[x][y + 1][1], points[x][y + 1][2]);
-                    gl.glVertex3d(points[x][y + 1][0] + quadNormal.getX(), points[x][y + 1][1] + quadNormal.getY(), points[x][y + 1][2] + quadNormal.getZ());
-
-                    gl.glVertex3d(points[x + 1][y + 1][0], points[x + 1][y + 1][1], points[x + 1][y + 1][2]);
-                    gl.glVertex3d(points[x + 1][y + 1][0] + quadNormal.getX(), points[x + 1][y + 1][1] + quadNormal.getY(), points[x + 1][y + 1][2] + quadNormal.getZ());
-
-
-                    gl.glVertex3d(points[x + 1][y][0], points[x + 1][y][1], points[x + 1][y][2]);
-                    gl.glVertex3d(points[x + 1][y][0] + quadNormal.getX(), points[x + 1][y][1] + quadNormal.getY(), points[x + 1][y][2] + quadNormal.getZ());
-                }
-            }
-            gl.glEnd();
-        }
-
         drawAxes();
-
-        gl.glPopMatrix();
     }
 
     public void reshape(GLAutoDrawable glDrawable, int x, int y, int windowWidth, int windowHeight) {
@@ -180,11 +164,11 @@ class ZamaniRenderer implements GLEventListener, KeyListener, MouseWheelListener
         // Setup our projection matrix.
         gl.glMatrixMode(GL2.GL_PROJECTION);
         gl.glLoadIdentity();
-        glu.gluPerspective(45.0f, (float) windowWidth / (float) windowHeight, 0.1f, 100.0f);
+        glu.gluPerspective(Camera.FOV, (float) windowWidth / (float) windowHeight, Camera.NEAR_PLANE, Camera.FAR_PLACE);
     }
 
     private void setupLighting() {
-        float[] lightPosition = {0, 100, 100, 1};
+        float[] lightPosition = {100, 0, 0, 1};
         float[] ambientColor = {0.8f, 0.8f, 0.8f, 1f};
         float[] diffuseColor = {1f, 0.6f, 0.6f, 1f};
         float[] specularColor = {1f, 1f, 1f, 1f};
@@ -200,16 +184,16 @@ class ZamaniRenderer implements GLEventListener, KeyListener, MouseWheelListener
     private void drawAxes() {
         gl.glBegin(GL2.GL_LINES);
         gl.glColor3f(1f, 0f, 0f);
-        gl.glVertex3f(100f, 0f, 0f);
-        gl.glVertex3f(-100f, 0f, 0f);
+        gl.glVertex3f(10000f, 0f, 0f);
+        gl.glVertex3f(-10000f, 0f, 0f);
 
         gl.glColor3f(0, 1f, 0);
-        gl.glVertex3f(0, 100f, 0);
-        gl.glVertex3f(0, -100f, 0);
+        gl.glVertex3f(0, 10000f, 0);
+        gl.glVertex3f(0, -10000f, 0);
 
         gl.glColor3f(0, 0, 1f);
-        gl.glVertex3f(0, 0, 100f);
-        gl.glVertex3f(0, 0, -100f);
+        gl.glVertex3f(0, 0, 1000f);
+        gl.glVertex3f(0, 0, -10000f);
 
         gl.glEnd();
     }
@@ -322,5 +306,16 @@ class ZamaniRenderer implements GLEventListener, KeyListener, MouseWheelListener
         Point hotSpot = new Point(0, 0);
         BufferedImage cursorImage = new BufferedImage(1, 1, BufferedImage.TRANSLUCENT);
         invisibleCursor = toolkit.createCustomCursor(cursorImage, hotSpot, "InvisibleCursor");
+    }
+
+    private static void setupLogging() {
+        // Set all logging.
+        Logger root = Logger.getLogger("");
+        root.setLevel(FINE);
+        for (Handler handler : root.getHandlers()) {
+            if (handler instanceof ConsoleHandler) {
+                handler.setLevel(FINE);
+            }
+        }
     }
 }
