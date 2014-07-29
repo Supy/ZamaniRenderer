@@ -25,7 +25,7 @@ public class NormalsCalculator {
             Vector3D edge1 = v2.subtract(v3);
             Vector3D edge2 = v1.subtract(v3);
 
-            double[] normalD = edge2.crossProduct(edge1).toArray();
+            double[] normalD = edge1.crossProduct(edge2).toArray();
             float[] normalF = new float[] {(float) normalD[0], (float)normalD[1], (float)normalD[2]};
 
             // Need to normalize the normal else we'll get poorly weighted final normal when we average it.
@@ -66,5 +66,23 @@ public class NormalsCalculator {
         }
 
         return normals;
+    }
+
+    public static float[] mergeWithVertices(float[] vertices, int[] indices) {
+        float[] verticesAndNormals = new float[vertices.length * 2];
+
+        float[] normals = calculateFrom(vertices, indices);
+
+        for(int i=0; i < verticesAndNormals.length; i++) {
+            int mod = i % 6;
+
+            if(mod <= 2) {
+                verticesAndNormals[i] = vertices[(i / 6) * 3 + mod];
+            }else{
+                verticesAndNormals[i] = normals[(i / 6) * 3 + (i % 3)];
+            }
+        }
+
+        return verticesAndNormals;
     }
 }
