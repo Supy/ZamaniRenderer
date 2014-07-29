@@ -2,6 +2,7 @@ import com.jogamp.opengl.util.Animator;
 import org.apache.commons.math3.geometry.euclidean.threed.Vector3D;
 import ply.PLYReader;
 import utils.ByteSize;
+import utils.NormalsCalculator;
 
 import javax.media.opengl.GL2;
 import javax.media.opengl.GLAutoDrawable;
@@ -101,6 +102,7 @@ class ZamaniRenderer implements GLEventListener, KeyListener, MouseWheelListener
         gl.glHint(GL2.GL_PERSPECTIVE_CORRECTION_HINT, GL2.GL_NICEST);   // Quality of perspective calculations. Can possibly lower this.
         gl.glEnableClientState(GL2.GL_VERTEX_ARRAY);
         gl.glEnable(GL2.GL_CULL_FACE);
+        gl.glFrontFace(GL2.GL_CW);
 
         setupLighting();
 
