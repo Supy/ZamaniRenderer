@@ -4,6 +4,7 @@ import ply.PLYReader;
 import utils.ByteSize;
 import utils.NormalsCalculator;
 import utils.ShaderControl;
+import utils.ShaderType;
 
 import javax.media.opengl.GL2;
 import javax.media.opengl.GLAutoDrawable;
@@ -48,7 +49,7 @@ class ZamaniRenderer implements GLEventListener, KeyListener, MouseWheelListener
     private final IntBuffer buffers = IntBuffer.allocate(2);
 
     private ShaderControl shaderControl;
-    private float[] data;
+    private float[] vertexNormalData;
 
     public static void main(String[] args) {
 
@@ -60,8 +61,6 @@ class ZamaniRenderer implements GLEventListener, KeyListener, MouseWheelListener
 
         try {
             ZamaniRenderer zamaniRenderer = new ZamaniRenderer(args[0]);
-
-
 
             GLCanvas canvas = new GLCanvas();
             canvas.addGLEventListener(zamaniRenderer);
@@ -96,7 +95,7 @@ class ZamaniRenderer implements GLEventListener, KeyListener, MouseWheelListener
 
     private ZamaniRenderer(String fileName) throws IOException {
         this.plyReader = new PLYReader(fileName);
-        this.data = NormalsCalculator.mergeWithVertices(this.plyReader.vertices, this.plyReader.indices);
+        this.vertexNormalData = NormalsCalculator.mergeWithVertices(this.plyReader.vertices, this.plyReader.indices);
     }
 
     public void init(GLAutoDrawable glDrawable) {
@@ -109,32 +108,24 @@ class ZamaniRenderer implements GLEventListener, KeyListener, MouseWheelListener
         gl.glClearDepth(1.0);
         gl.glHint(GL2.GL_PERSPECTIVE_CORRECTION_HINT, GL2.GL_NICEST);   // Quality of perspective calculations. Can possibly lower this.
         gl.glEnableClientState(GL2.GL_VERTEX_ARRAY);
+        gl.glEnableClientState(GL2.GL_NORMAL_ARRAY);
         gl.glEnable(GL2.GL_CULL_FACE);
         gl.glFrontFace(GL2.GL_CW);
 
         setupLighting();
 
-        //loadShaders();
+        loadShaders();
 
-
-        FloatBuffer vertexNormalData = FloatBuffer.wrap(data);
+        FloatBuffer vertexNormalDataBuffer = FloatBuffer.wrap(vertexNormalData);
 
         gl.glGenBuffers(2, buffers);
         gl.glBindBuffer(GL2.GL_ARRAY_BUFFER, buffers.get(0));
-        gl.glBufferData(GL2.GL_ARRAY_BUFFER, this.plyReader.vertices.length * 2 * ByteSize.FLOAT, vertexNormalData, GL2.GL_STATIC_DRAW);
+        gl.glBufferData(GL2.GL_ARRAY_BUFFER, this.plyReader.vertices.length * 2 * ByteSize.FLOAT, vertexNormalDataBuffer, GL2.GL_STATIC_DRAW);
         gl.glBindBuffer(GL2.GL_ARRAY_BUFFER, 0);
-
-//        gl.glBindBuffer(GL2.GL_ARRAY_BUFFER, buffers.get(0));
-//        gl.glEnableVertexAttribArray(0);    //We like submitting vertices on stream 0 for no special reason
-//        gl.glVertexAttribPointer(0, 3, GL2.GL_FLOAT, false, 24, 0);   //The starting point of the VBO, for the vertices
-//        gl.glEnableVertexAttribArray(1);    //We like submitting normals on stream 1 for no special reason
-//        gl.glVertexAttribPointer(1, 3, GL2.GL_FLOAT, false, 24, 12);     //The starting point of normals, 12 bytes away
 
         gl.glBindBuffer(GL2.GL_ELEMENT_ARRAY_BUFFER, buffers.get(1));
         gl.glBufferData(GL2.GL_ELEMENT_ARRAY_BUFFER, this.plyReader.indices.length * ByteSize.INT, IntBuffer.wrap(this.plyReader.indices), GL2.GL_STATIC_DRAW);
         gl.glBindBuffer(GL2.GL_ELEMENT_ARRAY_BUFFER, 0);
-
-
 
         camera = new Camera();
 
@@ -165,29 +156,24 @@ class ZamaniRenderer implements GLEventListener, KeyListener, MouseWheelListener
 
 
         gl.glEnable(GL2.GL_LIGHTING);
-        //shaderControl.useShader(gl);
+        shaderControl.useShader();
 
         // Draw the model.
         gl.glBindBuffer(GL2.GL_ARRAY_BUFFER, buffers.get(0));
         gl.glVertexPointer(3, GL2.GL_FLOAT, 24, 0);
         gl.glNormalPointer(GL2.GL_FLOAT, 24, 12);
-
-
         gl.glBindBuffer(GL2.GL_ELEMENT_ARRAY_BUFFER, buffers.get(1));
         gl.glDrawElements(GL2.GL_TRIANGLES, this.plyReader.indices.length, GL2.GL_UNSIGNED_INT, 0);
 
-
-
-        //shaderControl.dontUseShader(gl);
-
+        shaderControl.dontUseShader();
         gl.glDisable(GL2.GL_LIGHTING);
 
         if(drawNormals) {
             gl.glBegin(GL2.GL_LINES);
             gl.glColor3f(0.2f, 0.7f, 0);
-            for (int i = 0; i < data.length; i += 6) {
-                gl.glVertex3f(data[i], data[i + 1], data[i + 2]);
-                gl.glVertex3f(data[i] + data[i + 3], data[i + 1] + data[i + 4], data[i + 2] + data[i + 5]);
+            for (int i = 0; i < vertexNormalData.length; i += 6) {
+                gl.glVertex3f(vertexNormalData[i], vertexNormalData[i + 1], vertexNormalData[i + 2]);
+                gl.glVertex3f(vertexNormalData[i] + vertexNormalData[i + 3], vertexNormalData[i + 1] + vertexNormalData[i + 4], vertexNormalData[i + 2] + vertexNormalData[i + 5]);
             }
             gl.glEnd();
         }
@@ -210,17 +196,26 @@ class ZamaniRenderer implements GLEventListener, KeyListener, MouseWheelListener
     }
 
     private void setupLighting() {
-        float[] lightPosition = {0, 100, 0, 1};
-        float[] ambientColor = {0.5f, 0.5f, 0.5f, 1f};
+        float[] worldAmbience = {0.35f, 0.15f, 0.05f, 0.01f};
+        gl.glLightModelfv(GL2.GL_LIGHT_MODEL_AMBIENT, worldAmbience, 0);
+
+        float[] lightPosition = {10000, 10000, 10000, 1};
         float[] diffuseColor = {0.8f, 0.6f, 0.6f, 1f};
-        float[] specularColor = {0.9f, 0.9f, 0.9f, 1f};
+        float[] specularColor = {0.9f, 0.9f, 0.9f, 0.6f};
 
         gl.glEnable(GL2.GL_LIGHTING);
         gl.glEnable(GL2.GL_LIGHT0);
-        gl.glLightfv(GL2.GL_LIGHT0, GL2.GL_AMBIENT, ambientColor, 0);
         gl.glLightfv(GL2.GL_LIGHT0, GL2.GL_DIFFUSE, diffuseColor, 0);
         gl.glLightfv(GL2.GL_LIGHT0, GL2.GL_POSITION, lightPosition, 0);
         gl.glLightfv(GL2.GL_LIGHT0, GL2.GL_SPECULAR, specularColor, 0);
+
+        float[] lightPosition1 = {10000, 10000, -10000, 1};
+        float[] diffuseColor1 = {0.8f, 0.6f, 0.6f, 1f};
+        float[] specularColor1 = {0.9f, 0.9f, 0.9f, 0.6f};
+        gl.glEnable(GL2.GL_LIGHT1);
+        gl.glLightfv(GL2.GL_LIGHT1, GL2.GL_DIFFUSE, diffuseColor1, 0);
+        gl.glLightfv(GL2.GL_LIGHT1, GL2.GL_POSITION, lightPosition1, 0);
+        gl.glLightfv(GL2.GL_LIGHT1, GL2.GL_SPECULAR, specularColor1, 0);
     }
 
     private void drawAxes() {
@@ -241,15 +236,13 @@ class ZamaniRenderer implements GLEventListener, KeyListener, MouseWheelListener
     }
 
     private void loadShaders() {
-        shaderControl = new ShaderControl();
+        shaderControl = new ShaderControl(gl);
         try {
-            shaderControl.fsrc = shaderControl.loadShader("F:\\My Documents\\Workspace\\Zamani Renderer\\src\\shaders\\fragment_shader.glsl");
-            shaderControl.vsrc = shaderControl.loadShader("F:\\My Documents\\Workspace\\Zamani Renderer\\src\\shaders\\vertex_shader.glsl");
-            shaderControl.init(gl);
-            //shaderControl.useShader(gl);
+            shaderControl.loadShader("F:\\My Documents\\Workspace\\Zamani Renderer\\src\\shaders\\fragment_shader.glsl", ShaderType.FRAGMENT);
+            shaderControl.loadShader("F:\\My Documents\\Workspace\\Zamani Renderer\\src\\shaders\\vertex_shader.glsl", ShaderType.VERTEX);
+            shaderControl.init();
         } catch(IOException e) {
             log.log(Level.SEVERE, "failed to load shaders", e);
-            System.exit(1);
         }
     }
 

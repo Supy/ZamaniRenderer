@@ -4,25 +4,32 @@ import javax.media.opengl.GL2;
 import java.io.*;
 
 /**
- * ShaderControl class taken from http://www.guyford.co.uk/showpage.php?id=50&page=How_to_setup_and_load_GLSL_Shaders_in_JOGL_2.0
+ * ShaderControl class adapted from http://www.guyford.co.uk/showpage.php?id=50&page=How_to_setup_and_load_GLSL_Shaders_in_JOGL_2.0
  */
 public class ShaderControl {
+
     private int vertexShaderProgram;
     private int fragmentShaderProgram;
-    private int shaderprogram;
-    public String[] vsrc = null;
-    public String[] fsrc = null;
+    private int shaderProgram;
+    public String[] vertexShaderSrc = null;
+    public String[] fragmentShaderSrc = null;
 
-    public void init(GL2 gl) {
+    private GL2 gl;
+
+    public ShaderControl(GL2 gl){
+        this.gl = gl;
+    }
+
+    public void init() {
         try {
-            attachShaders(gl);
+            attachShaders();
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
     // Loads the shader in a file.
-    public String[] loadShader(String name) throws IOException {
+    public void loadShader(String name, ShaderType shaderType) throws IOException {
         StringBuilder sb = new StringBuilder();
 
         InputStream is = new FileInputStream(name);
@@ -33,34 +40,46 @@ public class ShaderControl {
             sb.append('\n');
         }
         is.close();
-        System.out.println("Shader is " + sb.toString());
-        return new String[]{sb.toString()};
+
+        String[] shader = new String[]{sb.toString()};
+
+        switch(shaderType) {
+            case VERTEX:
+                this.vertexShaderSrc = shader;
+                break;
+            case FRAGMENT:
+                this.fragmentShaderSrc = shader;
+                break;
+        }
     }
 
-    private void attachShaders(GL2 gl) throws Exception {
-        shaderprogram = gl.glCreateProgram();
+    private void attachShaders() throws Exception {
+        shaderProgram = gl.glCreateProgram();
 
+        if(vertexShaderSrc == null){
+            throw new Exception("vertex shader not loaded");
+        }
         vertexShaderProgram = gl.glCreateShader(GL2.GL_VERTEX_SHADER);
-        gl.glShaderSource(vertexShaderProgram, 1, vsrc, null, 0);
+        gl.glShaderSource(vertexShaderProgram, 1, vertexShaderSrc, null, 0);
         gl.glCompileShader(vertexShaderProgram);
-        gl.glAttachShader(shaderprogram, vertexShaderProgram);
+        gl.glAttachShader(shaderProgram, vertexShaderProgram);
 
-        if(fsrc != null) {
+        if(fragmentShaderSrc != null) {
             fragmentShaderProgram = gl.glCreateShader(GL2.GL_FRAGMENT_SHADER);
-            gl.glShaderSource(fragmentShaderProgram, 1, fsrc, null, 0);
+            gl.glShaderSource(fragmentShaderProgram, 1, fragmentShaderSrc, null, 0);
             gl.glCompileShader(fragmentShaderProgram);
-            gl.glAttachShader(shaderprogram, fragmentShaderProgram);
+            gl.glAttachShader(shaderProgram, fragmentShaderProgram);
         }
 
-        gl.glLinkProgram(shaderprogram);
+        gl.glLinkProgram(shaderProgram);
     }
 
-    public int useShader(GL2 gl) {
-        gl.glUseProgram(shaderprogram);
-        return shaderprogram;
+    public int useShader() {
+        gl.glUseProgram(shaderProgram);
+        return shaderProgram;
     }
 
-    public void dontUseShader(GL2 gl) {
+    public void dontUseShader() {
         gl.glUseProgram(0);
     }
 }
