@@ -110,7 +110,7 @@ class ZamaniRenderer implements GLEventListener, KeyListener, MouseWheelListener
         gl.glEnableClientState(GL2.GL_VERTEX_ARRAY);
         gl.glEnableClientState(GL2.GL_NORMAL_ARRAY);
         gl.glEnable(GL2.GL_CULL_FACE);
-        gl.glFrontFace(GL2.GL_CW);
+        gl.glFrontFace(GL2.GL_CCW);
 
         setupLighting();
 
