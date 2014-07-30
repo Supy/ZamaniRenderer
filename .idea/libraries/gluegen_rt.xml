@@ -5,6 +5,8 @@
       <root url="jar://$PROJECT_DIR$/libs/jogl-all.jar!/" />
       <root url="jar://$PROJECT_DIR$/libs/jogl-all-natives-windows-amd64.jar!/" />
       <root url="jar://$PROJECT_DIR$/libs/gluegen-rt-natives-windows-amd64.jar!/" />
+      <root url="jar://$PROJECT_DIR$/libs/gluegen-rt-natives-linux-amd64.jar!/" />
+      <root url="jar://$PROJECT_DIR$/libs/jogl-all-natives-linux-amd64.jar!/" />
     </CLASSES>
     <JAVADOC />
     <SOURCES />
